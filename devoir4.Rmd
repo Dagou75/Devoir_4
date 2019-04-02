@@ -1,0 +1,107 @@
+---
+title: "Devoir4"
+author: "Daniel Gouge"
+date: "2019-04-01"
+output: github_document
+---
+#Les séries temporelles
+
+Voici certains modules nécessaires
+```{r}
+library("lubridate")
+library("forecast")
+library("fpp2")
+```
+##Créer la série temporelle
+
+```{r}
+library("tidyverse")
+hawai <- read_csv("data/hawai.csv")
+
+
+CO2_ts <- ts(c(hawai$CO2), start = c(1958, 3), frequency = 12)
+
+CO2_ts
+```
+
+##Séparer la série en partie d'entraînement et en partie test
+
+Nous cherchons à obtenir un modèle d'autoapprentissage conforme qui sera apte à faire des prédictions fiables. Pour avoir 70% des données en entraînement, nous finirons la partie entraînement en 1989.
+
+```{r}
+hawai_ts_train <- window(CO2_ts, end = c(1989, 12))
+
+hawai_ts_test <- window(CO2_ts, start = c(1990, 1))    
+
+```
+
+##Création d'un premier modèle ETS
+
+```{r}
+hawai_model <- ets(hawai_ts_train)
+
+hawai_model
+
+autoplot(hawai_model)
+
+```
+
+On observe ici une tendance à la hausse du niveau de CO2 de 1958 à 1990. Les observations du niveau de CO2 semblent avoir des valeurs qui varient en fonction des saisons à chaque année. La structure des données ne ressemble pas à un bruit blanc. (M,Ad,M) signifie que l'erreur est multiplicative, la tendance est présente et la saison est multiplicative.
+
+##Prédiction avec forecast
+
+```{r}
+
+hawai_ets <- hawai_ts_train %>% ets()
+hawai_fc <- hawai_ets %>% forecast(h=12*10)
+hawai_fc %>% autoplot() 
+summary(hawai_fc)
+
+autoplot(CO2_ts)
+autoplot(hawai_ts_test)
+```
+
+
+En comparant avec les données "test", on peut voir que la prédition de l'ETS est plutôt bonne par rapport aux variations dans les saisons. Par contre, il semble y avoir une plus grande tendance générale décroissante lorsque nous regardons les données prédites avec l'ETS. La structure des données commence donc à s'affaiser de plus en plus en s'approchant de l'an 2001. Le modèle devient donc de moins en moins fiable à mesure que le temps avance. 
+
+Pour comparer davantage, on peut regarder la précision.
+
+```{r}
+
+accuracy(hawai_fc, CO2_ts)
+
+```
+
+##Analyse des résidus
+
+```{r}
+
+checkresiduals(hawai_ets)
+
+```
+En premier lieu, on peut observer dans le graphique "Lag" que certaines données dépassent le seuil de confiance d'autocorrélation. Cela signifie qu'il existe une corrélation signidicative dans les données. Nous n'avons probablement pas affaire à un bruit blanc. Les résidues du graphique "residuals" semblent distribués normalement, mais il y a une forte concentration des données vers le 0. Cela pourrait être investigué. On peut aussi voir que certaines données plus extrêmes ont été prises vers l'an 1964. Celles-ci pourraient être aberrantes dépendamment de ce qui explique leur valeur.
+
+##Amélioration du modèle
+
+On pourrait aussi améliorer le modèle pour une meilleure prédiction à l'aide d'un prétraitement. Par exemple, on pourrait optimiser la valeur de lambda avec la fonction "BoxCox".
+
+```{r}
+
+BoxCox.lambda(hawai_ts_train)
+
+hawai_ets <- hawai_ts_train %>% ets(lambda = 0.1127)
+hawai_fc <- hawai_ets %>% forecast(h=12*10)
+hawai_fc %>% autoplot() 
+summary(hawai_fc)
+
+```
+
+Le résultat est déjà mieux, car on observe beaucoup moins "d'affaissement" du modèle ETS précédent. Le ETS devient alors (AAA), donc une erreur aditive, une tendance présente et la saison aditive, ce qui semble correspondre au jeu de donnée entier.
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
